@@ -1,0 +1,74 @@
+spring:
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://i9B210.p.ssafy.io:5050/damda?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: b210
+    password: b210shinchanghak
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy
+      use-new-id-generator-mappings: false
+    show-sql: false
+    properties:
+      hibernate.format_sql: false
+      dialect: org.hibernate.dialect.MySQL8InnoDBDialect
+
+  #Personal Information Management(.ignore)
+  profiles:
+    include: secret
+
+  mail:
+    smtp:
+      auth: true
+      starttls:
+        required: true
+        enable: true
+      socketFactory:
+        class: javax.net.ssl.SSLSocketFactory
+        fallback: false
+        port: 465
+      port: 465
+
+
+  AdminMail:
+    id: "damdaCop"
+    password: "vizahyecgncvsdch"
+
+
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: 9292106e6bff609d98bd0df4de1ede06
+            client-secret: GcveX0t6jBVJV3TT7XOxrFAc13inJUYf
+            scope:
+              - account_email
+              - profile_nickname
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+            client-name: Kakao
+            client-authentication-method: POST
+
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+
+
+
+
+
+
+
