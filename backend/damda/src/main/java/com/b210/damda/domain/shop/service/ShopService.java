@@ -1,21 +1,26 @@
 package com.b210.damda.domain.shop.service;
 
-import com.b210.damda.domain.dto.ItemsMappingDTO;
-import com.b210.damda.domain.dto.ItemsShopDTO;
-import com.b210.damda.domain.dto.ThemaMappingDTO;
-import com.b210.damda.domain.dto.ThemaShopDTO;
+import com.b210.damda.domain.dto.*;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public interface ShopService {
-    List<ThemaShopDTO> getThemaList(Long userNo);
-    List<ThemaShopDTO> getThemAllList();
-    List<ThemaMappingDTO> getThemMappingList(Long userNo);
-    Map<String, Object> getItemList(Long userNo);
-    List<ItemsMappingDTO> getItemsMappginList(Long userNo);
+    List<ThemeShopDTO> getThemeList();
+    List<ThemeShopDTO> getThemAllList();
+    List<ThemeMappingDTO> getThemMappingList();
+    Map<String, Object> getItemList();
+    List<ItemsMappingDTO> getItemsMappginList();
     List<ItemsShopDTO> getItemAllList();
 
-    Map<String, Object> buyThema(Long userNo, Long themaNo);
+    Map<String, Object> buyTheme(Long themeNo);
+
+    Map<String, Object> buySticker(Long itemNo);
+
+    Map<String, Object> buyCapsuleLimit(Long itemNo);
+
+    List<TimecapsuleShopDTO> timecapsuleList();
+
+    void timecapsuleSize(Long timecapsuleNo, Long itemNo);
 }

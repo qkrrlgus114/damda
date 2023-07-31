@@ -11,7 +11,11 @@ import com.b210.damda.domain.user.repository.UserRepository;
 import com.b210.damda.util.JwtUtil;
 import com.b210.damda.util.emailAPI.dto.TempCodeDTO;
 import com.b210.damda.util.emailAPI.repository.EmailSendLogRepository;
+import com.b210.damda.util.emailAPI.repository.SignupEmailLogRepository;
+import com.b210.damda.util.exception.CommonException;
+import com.b210.damda.util.exception.CustomExceptionStatus;
 import com.b210.damda.util.refreshtoken.repository.RefreshTokenRepository;
+import com.b210.damda.util.response.DataResponse;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,10 +45,11 @@ public class UserService {
     private EmailSendLogRepository emailSendLogRepository;
     private FriendRepository friendRepository;
     private FileStoreService fileStoreService;
+    private SignupEmailLogRepository signupEmailLogRepository;
 
     @Autowired
     public UserService(UserRepository userRepository, UserLogRepository userLogRepository, BCryptPasswordEncoder encoder, RefreshTokenRepository refreshTokenRepository,
-                       EmailSendLogRepository emailSendLogRepository, FriendRepository friendRepository, FileStoreService fileStoreService) {
+                       EmailSendLogRepository emailSendLogRepository, FriendRepository friendRepository, FileStoreService fileStoreService, SignupEmailLogRepository signupEmailLogRepository) {
         this.userRepository = userRepository;
         this.userLogRepository = userLogRepository;
         this.encoder = encoder;
@@ -52,6 +57,7 @@ public class UserService {
         this.emailSendLogRepository = emailSendLogRepository;
         this.friendRepository = friendRepository;
         this.fileStoreService = fileStoreService;
+        this.signupEmailLogRepository = signupEmailLogRepository;
     }
 
 
@@ -81,25 +87,21 @@ public class UserService {
 
     // 로그인
     @Transactional
-    public Map<String, String> login(String email, String password) {
-        Optional<User> findUser = userRepository.findByEmail(email);
-        Map<String, String> tokens = new HashMap<>();
+    public Map<String, Object> login(String email, String password) {
 
-        // 유저의 이메일이 없음
-        if (findUser.isEmpty()) {
-            tokens.put("error", "유저 없음");
-            return tokens;
-        }
+        Optional<User> findUser = Optional.ofNullable(userRepository.findByEmail(email)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+
+        User user = findUser.get();
 
         // 비밀번호 불일치
-        if (!encoder.matches(password, findUser.get().getUserPw())) {
-            tokens.put("error", "비밀번호 틀림");
-            return tokens;
+        if (!encoder.matches(password, user.getUserPw())){
+            throw new CommonException(CustomExceptionStatus.NOT_MATCH_PASSWORD);
         }
-        User user = findUser.get();
+
+        // 이미 탈퇴한 유저
         if(user.getDeleteDate() != null){
-            tokens.put("error", "탈퇴된 유저");
-            return tokens;
+            throw new CommonException(CustomExceptionStatus.USER_ALREADY_DEACTIVATED);
         }
 
         // 로그인 성공
@@ -107,6 +109,8 @@ public class UserService {
         String refreshToken = JwtUtil.createRefreshToken(secretKey); // 리프레시 토큰 발급해서 넘김
 
         Optional<RefreshToken> byUserUserNo = refreshTokenRepository.findByUserUserNo(user.getUserNo());
+
+        // 리프레시 토큰 있는지 없는지 판단해서 저장
         if (byUserUserNo.isPresent()) {
             RefreshToken currentRefreshToken = byUserUserNo.get(); // 현재 유저의 리프레시 토큰 꺼내옴
 
@@ -126,16 +130,17 @@ public class UserService {
             refreshTokenRepository.save(refreshTokenUser); // 리프레시 토큰 저장.
         }
 
+        Map<String, Object> response = new HashMap<>();
 
-        tokens.put("accessToken", accessToken);
-        tokens.put("refreshToken", refreshToken);
+        response.put("accessToken", accessToken);
+        response.put("refreshToken", refreshToken);
 
         // 로그인 log 기록
         UserLog userLog = new UserLog();
         userLog.setUser(user);
         userLogRepository.save(userLog);
 
-        return tokens;
+        return response;
     }
 
     // 유저 이메일 확인(이메일 존재하는지)
@@ -149,43 +154,71 @@ public class UserService {
 
     // 로그아웃 처리
     @Transactional
-    public int logout(String token) {
+    public void logout(String token) {
         String parsingToken = token.split(" ")[1];
+
         Optional<RefreshToken> byRefreshToken = refreshTokenRepository.findByRefreshToken(parsingToken);
+
         RefreshToken refreshToken = byRefreshToken.get(); // 유저의 리프레시 토큰 꺼냄.
         refreshToken.setRefreshToken("");
         RefreshToken save = refreshTokenRepository.save(refreshToken);
+    }
 
-        if (save.getRefreshToken().equals("")) { //리프레시 토큰이 만료됐으면
-            return 1;
-        } else { // 리프레시 토큰 만료 실패했으면
-            return 0;
+    // 회원가입 인증번호 확인
+    public int registCodeCheck(TempCodeDTO tempCodeDTO){
+        String code = tempCodeDTO.getCode();
+        String email = tempCodeDTO.getEmail();
+
+        Optional<SignupEmailLog> topByEmailOrderByCreateTimeDesc = Optional.ofNullable(signupEmailLogRepository.findTopByEmailOrderByCreateTimeDesc(email)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+
+        SignupEmailLog signupEmailLog = topByEmailOrderByCreateTimeDesc.get();
+
+        Map<String, Object> result = new HashMap<>();
+        if(!signupEmailLog.getVerificationCode().equals(code)){ // 코드가 일치하지 않는 상태
+            throw new CommonException(CustomExceptionStatus.NOT_MATCH_CODE);
+        }else{
+            if(signupEmailLog.getExpiryTime().isBefore(LocalDateTime.now())){ // 만료가 됐으면
+                throw new CommonException(CustomExceptionStatus.EXPIRE_CODE);
+            }else{ // 만료시간이 지나지 않은 상태
+                if(signupEmailLog.getVerificationCode().equals(tempCodeDTO.getCode()) && !signupEmailLog.isUsed()){ // 코드가 일치하고 사용하지 않은 상태
+                    signupEmailLog.setUsed(true);
+                    signupEmailLogRepository.save(signupEmailLog);
+                    return 1;
+                }else{ // 코드가 일치하지만 사용한 상태
+                    throw new CommonException(CustomExceptionStatus.ALREADY_USED_CODE);
+                }
+            }
         }
     }
 
-    // 유저 인증번호 확인
-    public int tempCodeCheck(TempCodeDTO tempCodeDTO) {
+    // 비밀번호 변경 인증번호 확인
+    @Transactional
+    public void tempCodeCheck(TempCodeDTO tempCodeDTO) {
         String email = tempCodeDTO.getEmail();
         String code = tempCodeDTO.getCode();
-        Optional<User> byEmail = userRepository.findByEmail(email);
+        
+        // 회원이 없음
+        Optional<User> byEmail = Optional.ofNullable(userRepository.findByEmail(email).
+                orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+        
         User user = byEmail.get();
 
         Long userNo = user.getUserNo();
 
-        Optional<EmailSendLog> topByUserUserNoOrderByCreateTimeDesc = emailSendLogRepository.findTopByUserUserNoOrderByCreateTimeDesc(userNo);
-        EmailSendLog emailSendLog = topByUserUserNoOrderByCreateTimeDesc.get();
+        EmailSendLog emailSendLog = emailSendLogRepository.findTopByUserUserNoOrderByCreateTimeDesc(userNo);
+
         if(!emailSendLog.getVerificationCode().equals(code)){ // 코드가 일치하지 않는 상태
-            return 4;
+            throw new CommonException(CustomExceptionStatus.NOT_MATCH_CODE);
         }else{
             if(emailSendLog.getExpiryTime().isBefore(LocalDateTime.now())){ // 만료시간이 지난 상태
-                return 1;
+                throw new CommonException(CustomExceptionStatus.EXPIRE_CODE);
             }else{ // 만료시간이 지나지 않은 상태
                 if(emailSendLog.getVerificationCode().equals(code) && !emailSendLog.isUsed()){ // 코드가 일치하고 사용하지 않은 상태
                     emailSendLog.setUsed(true);
                     emailSendLogRepository.save(emailSendLog);
-                    return 2;
                 }else{ // 코드가 일치하지만 사용한 상태
-                    return 3;
+                    throw new CommonException(CustomExceptionStatus.ALREADY_USED_CODE);
                 }
             }
         }
@@ -193,41 +226,40 @@ public class UserService {
 
     // 유저 비밀번호 재설정
     @Transactional
-    public int newPassword(UserUpdateDTO userUpdateDTO){
+    public void newPassword(UserUpdateDTO userUpdateDTO){
         String email = userUpdateDTO.getEmail();
         String userPw = userUpdateDTO.getUserPw();
 
-        Optional<User> byEmail = userRepository.findByEmail(email);
-        if(byEmail.isEmpty()){
-            return 1;
-        }else{
-            User user = byEmail.get();
-            if(encoder.matches(userPw, user.getUserPw())){
-                return 2;
-            }
-            user.updatePassword(encoder.encode(userPw));
-            userRepository.save(user);
-            return 3;
+        Optional<User> byEmail = Optional.ofNullable(userRepository.findByEmail(email)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+
+        User user = byEmail.get();
+
+        if(encoder.matches(userPw, user.getUserPw())){
+            throw new CommonException(CustomExceptionStatus.SAME_PASSWORD);
         }
+
+        user.updatePassword(encoder.encode(userPw));
+        userRepository.save(user);
     }
 
     // 비밀번호 확인
-    public int passwordCheck(String password){
+    public void passwordCheck(String password){
+
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Object principal = authentication.getPrincipal();
         Long userNo = (Long) principal;
-        Optional<User> byId = userRepository.findById(userNo);
-        if(byId.isEmpty()){ // 해당 유저가 없음
-            return 4001;
-        }else{
-            User user = byId.get();
-            if(encoder.matches(password, user.getUserPw())){ // 비밀번호 일치하면
-                return 200;
-            }else { // 비밀번호 일치하지 않으면
-                return 4002;
-            }
+
+        Optional<User> byId = Optional.ofNullable(userRepository.findById(userNo)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+
+        User user = byId.get();
+
+        if(!encoder.matches(password, user.getUserPw())){
+            throw new CommonException(CustomExceptionStatus.NOT_MATCH_PASSWORD);
         }
     }
+
 
     // 회원 검색
     public List<UserSearchResultDTO> userSearch(String query, String type){
@@ -274,33 +306,28 @@ public class UserService {
 
     @Transactional
     // 유저 정보 업데이트
-    public int userInfoUpdate(UserUpdateDTO userUpdateDTO, MultipartFile multipartFile){
+    public void userInfoUpdate(UserUpdateDTO userUpdateDTO, MultipartFile multipartFile){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Object principal = authentication.getPrincipal();
         Long userNo = (Long) principal;
 
-        Optional<User> byId = userRepository.findById(userNo);
-        if(byId.isEmpty()){
-            return 1;
-        }else{
-            User user = byId.get();
+        Optional<User> byId = Optional.ofNullable(userRepository.findById(userNo)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
 
-            if(!multipartFile.isEmpty()){
-                String uri = fileStoreService.storeFile(multipartFile);
-                user.updateprofileImage(uri);
-            }
-            if(!userUpdateDTO.getUserPw().equals("")){
-                String encode = encoder.encode(userUpdateDTO.getUserPw());
-                user.updatePassword(encode);
-            }
-            user.updateNickname(userUpdateDTO.getNickname());
-            User save = userRepository.save(user);
-            if(save != null){
-                return 2;
-            }else{
-                return 3;
-            }
+        User user = byId.get();
+
+        if(!multipartFile.isEmpty()){
+            String uri = fileStoreService.storeFile(multipartFile);
+            user.updateprofileImage(uri);
         }
+
+        if(!userUpdateDTO.getUserPw().equals("")){
+            String encode = encoder.encode(userUpdateDTO.getUserPw());
+            user.updatePassword(encode);
+        }
+
+        user.updateNickname(userUpdateDTO.getNickname());
+        userRepository.save(user);
     }
 
     @Transactional
@@ -309,11 +336,16 @@ public class UserService {
         Object principal = authentication.getPrincipal();
         Long userNo = (Long) principal;
 
-        Optional<User> byId = userRepository.findById(userNo);
+        Optional<User> byId = Optional.ofNullable(userRepository.findById(userNo)
+                .orElseThrow(() -> new CommonException(CustomExceptionStatus.USER_NOT_FOUND)));
+
         User user = byId.get();
-        RefreshToken referenceById = refreshTokenRepository.getReferenceById(user.getUserNo());
-        referenceById.setRefreshToken("");
-        refreshTokenRepository.save(referenceById);
+
+        Optional<RefreshToken> byUserUserNo = refreshTokenRepository.findByUserUserNo(user.getUserNo());
+
+        RefreshToken refreshToken = byUserUserNo.get();
+        refreshToken.setRefreshToken("");
+        refreshTokenRepository.save(refreshToken);
 
         user.insertDeleteDate();
         userRepository.save(user);

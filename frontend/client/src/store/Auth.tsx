@@ -1,47 +1,50 @@
-import { createSlice } from "@reduxjs/toolkit"
-import axios from "axios"
-import { serverUrl } from "../urls"
-import { getCookieToken } from "./Cookie"
+import { createSlice, PayloadAction } from "@reduxjs/toolkit"
 
-export const tokenSlice = createSlice({
-  name: "authToken",
-  initialState: {
-    accessToken: null,
-    accountType: "",
+interface authState {
+  accessToken: string | null
+  accountType: string
+  userInfo: UserInfo
+}
+
+const initialState: authState = {
+  accessToken: null,
+  accountType: "",
+  userInfo: {
+    nickname: "",
+    profileImage: "",
   },
+}
+
+export interface UserInfo {
+  nickname: string
+  profileImage: string
+}
+
+export const authSlice = createSlice({
+  name: "auth",
+  initialState,
   reducers: {
-    SET_TOKEN: (state, action) => {
+    SET_TOKEN: (state, action: PayloadAction<string>) => {
       state.accessToken = action.payload
     },
-    SET_ACCOUNT_TYPE: (state, action) => {
+    SET_USER: (state, action: PayloadAction<string>) => {
       state.accountType = action.payload
     },
     DELETE_TOKEN: (state) => {
       state.accessToken = null
       state.accountType = ""
     },
-    refresh_accessToken: (state) => {
-      axios({
-        method: "POST",
-        url: serverUrl + "user/refresh-token",
-        headers: {
-          "Content-Length": "application/json",
-          Authorization: "Bearer " + getCookieToken(),
-        },
-      })
-        .then((response) => {
-          state.accessToken = response.data.accessToken
-        })
-        .catch((error) => console.error(error))
+    DELETE_USER: (state) => {
+      state.accountType = ""
+      state.userInfo = {
+        nickname: "",
+        profileImage: "",
+      }
     },
   },
 })
 
-export const {
-  SET_TOKEN,
-  DELETE_TOKEN,
-  refresh_accessToken,
-  SET_ACCOUNT_TYPE,
-} = tokenSlice.actions
+export const { SET_TOKEN, DELETE_TOKEN, SET_USER, DELETE_USER } =
+  authSlice.actions
 
-export default tokenSlice.reducer
+export default authSlice.reducer

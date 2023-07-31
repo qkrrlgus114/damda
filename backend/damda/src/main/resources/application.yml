@@ -1,9 +1,8 @@
 spring:
-
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://i9B210.p.ssafy.io:5050/damda?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: b210
+    url: jdbc:mysql://i9b210.p.ssafy.io:7777/damda?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
     password: b210shinchanghak
 
   jpa:
@@ -22,6 +21,10 @@ spring:
   profiles:
     include: secret
 
+  AdminMail:
+    id: "damdaCop"
+    password: "vizahyecgncvsdch"
+
   mail:
     smtp:
       auth: true
@@ -35,11 +38,6 @@ spring:
       port: 465
 
 
-  AdminMail:
-    id: "damdaCop"
-    password: "vizahyecgncvsdch"
-
-
   security:
     oauth2:
       client:
@@ -51,7 +49,7 @@ spring:
               - account_email
               - profile_nickname
             authorization-grant-type: authorization_code
-            redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+            redirect-uri: http://i9b210.p.ssafy.io:8081/login/oauth2/code/kakao
             client-name: Kakao
             client-authentication-method: POST
 
