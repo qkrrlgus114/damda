@@ -1,10 +1,8 @@
-import React, { useEffect } from "react"
+import React from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { RootState } from "./store/Store"
 import { useSelector } from "react-redux"
 import { CookiesProvider } from "react-cookie"
-import { EventSourcePolyfill } from "event-source-polyfill"
-import { serverUrl } from "./urls"
 
 import MainPage from "./components/MainPage"
 import { CheckPassword } from "./components/Auth/CheckPassword"
@@ -45,6 +43,8 @@ function Main() {
       background-size: cover;
     }
   `
+<<<<<<< HEAD
+=======
   useEffect(() => {
     let eventSource: EventSource
     const fetchSse = () => {
@@ -111,6 +111,7 @@ function Main() {
       }
     }
   })
+>>>>>>> develop
 
   document.head.appendChild(styleElement)
   return (
