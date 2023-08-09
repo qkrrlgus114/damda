@@ -33,13 +33,13 @@ public class EventStreamService {
     private final AddOnEventService addOnEventService;
 
     //스트림 저장 : 동시성 처리를 위해 ConcurrentHashMap 사용, 해당 Map에 개별적인 클라이언트들의 Reactive Stream이 연결되어 저장(FluxSink 저장)
-    private final Map<Long, FluxSink<ServerSentEvent<JsonNode>>> userFluxSinkMap = new ConcurrentHashMap<>();
+    static public final Map<Long, FluxSink<ServerSentEvent<JsonNode>>> userFluxSinkMap = new ConcurrentHashMap<>();
 
     //자동 연결(heartbeat)통로 저장 : 자동으로 서버 -> 클라이언트로 주기적 요청을 보내는 스트림(maintainConnectFlux) 제거를 위한 Processors를 생성 후 보관
-    private final Map<Long, DirectProcessor<Void>> disconnectProcessors = new ConcurrentHashMap<>();
+    static public final Map<Long, DirectProcessor<Void>> disconnectProcessors = new ConcurrentHashMap<>();
 
     //마지막 heartbeat 시간대 체크 : 서버는 클라이언트의 연결 상태를 위해 주기적으로 마지막 접속 시간을 체크함, 클라이언트의 답신이 없어질 경우 끊어짐으로 판단
-    private final Map<Long, LocalDateTime> lastResponseTimes = new ConcurrentHashMap<>();
+    static public final Map<Long, LocalDateTime> lastResponseTimes = new ConcurrentHashMap<>();
 
     public void test() {
         log.warn("테스트 userFluxSinkMap 값 : {}", userFluxSinkMap.size());
