@@ -693,6 +693,12 @@ export const Unregistered: React.FC<CapsuleProps> = ({ capsuleData }) => {
     return Math.floor(Math.random() * (max - min + 1)) + min
   }
 
+  function getTodayDayEn() {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const today = new Date().getDay();
+    return days[today];
+  }
+
   function kakaoShare() {
     if (window.Kakao) {
       const kakao = window.Kakao
@@ -1218,6 +1224,10 @@ export const Unregistered: React.FC<CapsuleProps> = ({ capsuleData }) => {
                   capsuleData.goalCard <= capsuleData.nowCard ? (
                     <CardCompleteBtn>카드 작성불가</CardCompleteBtn>
                   ) : (
+                    capsuleData.criteriaInfo.cirteriaDays &&
+                    !capsuleData.criteriaInfo.cirteriaDays.some(day => day.dayEn === getTodayDayEn()) ? (
+                      <CardCompleteBtn>카드 작성 불가</CardCompleteBtn>
+                    ) : (
                     <CardBtn
                       onClick={() => {
                         navigate(`/card/${capsuleId}`)
@@ -1226,6 +1236,7 @@ export const Unregistered: React.FC<CapsuleProps> = ({ capsuleData }) => {
                       카드 작성하기
                     </CardBtn>
                   )
+                ) 
                 ) : (
                   <CardCompleteBtn>카드 작성완료</CardCompleteBtn>
                 )}
